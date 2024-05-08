@@ -1,117 +1,205 @@
-from django.db import models
-from django.contrib.auth.models import User
-import os
+from django.shortcuts import render,HttpResponseRedirect,HttpResponse
+from rest_framework import generics
+import json
+from .models import Account, Activity, ActivityStatus, Contact, ContactSource, ContactStatus
+from .serializers import AccountSerializer, ActivitySerializer, ActivityStatusSerializer, ContactSerializer, ContactSourceSerializer, ContactStatusSerializer,UserFileModelSerializer
+from rest_framework.decorators import api_view
+# Create your views here.
+from rest_framework import generics
+from django.http import JsonResponse
+from .models import Account, Activity, ActivityStatus, Contact, ContactSource, ContactStatus
+from .serializers import AccountSerializer, ActivitySerializer, ActivityStatusSerializer, ContactSerializer, ContactSourceSerializer, ContactStatusSerializer
 
-INDCHOICES = (
-    ('FINANCE', 'FINANCE'),
-    ('HEALTHCARE', 'HEALTHCARE'),
-    ('INSURANCE', 'INSURANCE'),
-    ('LEGAL', 'LEGAL'),
-    ('MANUFACTURING', 'MANUFACTURING'),
-    ('PUBLISHING', 'PUBLISHING'),
-    ('REAL ESTATE', 'REAL ESTATE'),
-    ('SOFTWARE', 'SOFTWARE'),
-)
+from rest_framework.renderers import TemplateHTMLRenderer
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import serializers
 
-class Account(models.Model):
-    name = models.CharField("Name of Account", "name", max_length=64)
-    email = models.EmailField(blank = True, null = True)
-    phone = models.CharField(max_length=20, blank = True, null = True)
-    industry = models.CharField("Industry Type", max_length=255, choices=INDCHOICES, blank=True, null=True)
-    website = models.URLField("Website", blank=True, null=True)
-    description = models.TextField(blank=True, null=True)
-    createdBy = models.ForeignKey(User, related_name='account_created_by', on_delete=models.CASCADE)
-    createdAt = models.DateTimeField("Created At", auto_now_add=True)
-    isActive = models.BooleanField(default=False)
+from .forms import CloudUserFrom,UserFileForm
+from .models import CloudUsersModel
+from django.contrib import messages
+from rest_framework import status
+from .models import CloudUsersModel,UserAppCreatModel,UserFileModel
 
-    def __str__(self):
-        return self.name
 
-class ContactSource(models.Model):
-    status = models.CharField("Contact Source", max_length=20)
+#@api_view(['GET', 'POST'])
+class AccountAPIView(generics.ListCreateAPIView):
+    queryset = Account.objects.all()
+    serializer_class = AccountSerializer
+    renderer_classes = [TemplateHTMLRenderer]
+    template_name = 'profile_list.html'
 
-    def __str__(self):
-        return self.status
+    def get(self, request):
+        queryset = Account.objects.all()
+        return Response({'profiles': queryset})
 
-class ContactStatus(models.Model):
-    status = models.CharField("Contact Status", max_length=20)
+    def post(self, request, pk):
+        print('AM going to Execute atleast once in my life')
+        profile = get_object_or_404(Account, pk=pk)
+        serializer = AccountSerializer(profile, data=request.data)
+        if not serializer.is_valid():
+            return Response({'serializer': serializer, 'profile': Account})
+        serializer.save()
+        return redirect('account-list')
 
-    def __str__(self):
-        return self.status
+class ActivityAPIView(generics.ListCreateAPIView):
+    queryset = Activity.objects.all()
+    serializer_class = ActivitySerializer
 
-class Contact(models.Model):
-    first_name = models.CharField("First name", max_length=255, blank = True, null = True)
-    last_name = models.CharField("Last name", max_length=255, blank = True, null = True)
-    account = models.ForeignKey(Account, related_name='lead_account_contacts', on_delete=models.CASCADE, blank=True, null=True)
-    email = models.EmailField()
-    phone = models.CharField(max_length=20, blank = True, null = True)
-    address = models.TextField(blank=True, null=True)
-    description = models.TextField(blank=True, null=True)
-    createdBy = models.ForeignKey(User, related_name='contact_created_by', on_delete=models.CASCADE)
-    createdAt = models.DateTimeField("Created At", auto_now_add=True)
-    isActive = models.BooleanField(default=False)
+class ActivityStatusAPIView(generics.ListCreateAPIView):
+    queryset = ActivityStatus.objects.all()
+    serializer_class = ActivitySerializer
 
-    def __str__(self):
-        return self.first_name
+class ContactAPIView(generics.ListCreateAPIView):
+    queryset = Contact.objects.all()
+    serializer_class = ContactSerializer
 
-class ActivityStatus(models.Model):
-    status = models.CharField("Activity Status", max_length=20)
+class ContactStatusAPIView(generics.ListCreateAPIView):
+    queryset = ContactStatus.objects.all()
+    serializer_class = ContactSerializer
 
-    def __str__(self):
-        return self.status
+class ContactSourceAPIView(generics.ListCreateAPIView):
+    queryset = ContactSource.objects.all()
+    serializer_class = ContactSourceSerializer
 
-class Activity(models.Model):
-    description = models.TextField(blank=True, null=True)
-    createdAt = models.DateTimeField("Created At", auto_now_add=True)
-    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, blank=True, null=True)
 
-    def __str__(self):
-        return self.description
+def index(request):
+    return render(request,'index.html',{})
+def userlogin(request):
+    return render(request,'userlogin.html',{})
+def adminlogin(request):
+    return render(request,'adminlogin.html',{})
+def cloudlogin(request):
+    return render(request,'cloudlogin.html',{})
+def userregister(request):
+    return render(request,'userregister.html',{})
 
-class CloudUsersModel(models.Model):
-    id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=200)
-    email = models.CharField(max_length=100,unique=True)
-    password = models.CharField(max_length=100)
-    mobile = models.CharField(max_length=100)
-    address = models.TextField(max_length=100)
-    city = models.CharField(max_length=100)
-    state = models.CharField(max_length=100)
-    status = models.CharField(max_length=100,default='waiting')
+@api_view(['GET', 'POST'])
+def storeregistration(request):
+    if request.method == 'POST':
+        form = CloudUserFrom(request.POST)
+        if form.is_valid():
+            try:
+                rslt = form.save()
+                print("Form Result Status ", rslt)
+                messages.success(request, 'You have been successfully registered')
+            except:
+                messages.success(request, 'Email Already Registerd')
+            return  render(request, 'userregister.html',{})
+        else:
+            print("Invalid form")
+    else:
+        form = CloudUserFrom()
+    return render(request, 'userregister.html', {'form': form})
 
-    def __str__(self):
-        return self.email
+def userlogincheck(request):
+    if request.method == "POST":
+        email = request.POST.get('cf-email')
+        pswd = request.POST.get('cf-password')
+        print("Email = ", email)
+        try:
+            check = CloudUsersModel.objects.get(email=email, password=pswd)
+            request.session['id'] = check.id
+            request.session['loggeduser'] = check.name
+            request.session['email'] = check.email
+            request.session['role']='user'
+            status = check.status
+            if status == "activated":
+                print("User id At", check.id, status)
+                return render(request, 'users/userpage.html', {})
+            else:
+                messages.success(request, 'Your Account Not at activated')
+                return render(request, 'userlogin.html')
 
-    class Meta:
-        db_table = "registrations"
+            return render(request, 'userlogin.html', {})
+        except:
+            pass
+    messages.success(request, 'Invalid Email id and password')
+    return render(request, 'userlogin.html')
 
-class UserAppCreatModel(models.Model):
-    id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=200)
-    email = models.CharField(max_length=200)
-    appname = models.CharField(max_length=200,unique=True)
-    accesskey = models.CharField(max_length=200,default='waiting')
-    secretkey = models.CharField(max_length=200,default='waiting')
-    def __str__(self):
-        return self.appname
-    class Meta:
-        db_table = "userapps"
 
-class UserFileModel(models.Model):
-    id = models.AutoField(primary_key=True)
-    name         = models.CharField(max_length=200)
-    email       = models.CharField(max_length=200)
-    appname           = models.CharField(max_length=200)
-    accesskey               = models.CharField(max_length=200)
-    secretkey               = models.CharField(max_length=200)
-    filename                = models.CharField(max_length=200)
-    userfile             = models.FileField(upload_to='media/')
 
-    def __str__(self):
-        return os.path.basename(self.userfile.name)
-    class Meta:
-        db_table = "userfiles"
+@api_view(['GET', 'PUT', 'DELETE','POST'])
+def snippet_detail(request):
+    role = request.session['role']
 
-    def delete(self, *args, **kwargs):
-        self.userfile.delete()
-        super().delete(*args, **kwargs)
+    usremail = request.session['email']
+    try:
+        snippet = UserFileModel.objects.filter(email=usremail)
+        #print('Type is ',snippet.id)
+    except CloudUsersModel.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+    if request.method == 'GET':
+        if role == 'user':
+            print('Get Method Works Fine')
+            usremail = request.session['email']
+            queryset =  UserFileModel.objects.filter(email=usremail)
+            serializer_class = UserFileModelSerializer
+            print('Return Type is ',serializer_class)
+            return render(request,'users/uploadedfiles.html',{'objects':queryset})
+        elif role=='admin':
+            queryset = UserFileModel.objects.all()
+            serializer_class = UserFileModelSerializer
+            return render(request, 'admin/adminuploadedfiles.html', {'objects': queryset})
+
+        elif role =='cloud':
+            queryset = UserFileModel.objects.all()
+            serializer_class = UserFileModelSerializer
+            return render(request, 'clouds/clouduploadedfiles.html', {'objects': queryset})
+
+    elif request.method == 'PUT':
+        print('PUT Method Works Fine')
+        serializer = UserFileModelSerializer(snippet, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    elif request.method == 'DELETE':
+        print('DELETE Method Works Fine')
+        #snippet.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    elif request.method=="POST":
+        print('POST Method Works Fine')
+        form = UserFileForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save()
+        else:
+            print('Invalid Form')
+        return Response(status=status.HTTP_201_CREATED)
+
+def logout(request):
+    request.session.modified = True
+    return render(request,'index.html',{})
+
+def usercreateapp(request):
+    usremail = request.session['email']
+    dict = UserAppCreatModel.objects.filter(email=usremail)
+    return render(request,'users/userappcreations.html',{'objects':dict})
+
+def appcreaterequest(request):
+    if request.method=='POST':
+        usrname = request.POST.get('usrname')
+        usremail = request.POST.get('usremail')
+        appname = request.POST.get('appname')
+        accesskey = request.POST.get('accesskey')
+        secretkey = request.POST.get('secretkey')
+        try:
+            UserAppCreatModel.objects.create(name=usrname,email=usremail,appname=appname)
+            messages.success(request, 'Your App creation Request is Under Process')
+        except:
+            messages.success(request, 'App Name Already exist')
+            pass
+
+
+
+        print(usrname,usremail,appname,accesskey,secretkey)
+        dict = UserAppCreatModel.objects.filter(email=usremail)
+    return render(request,'users/userappcreations.html',{'objects':dict})
+
+def useruploadfile(request,appname):
+    check = UserAppCreatModel.objects.get(appname=appname)
+    acckey = check.accesskey
+    secretkey = check.secretkey
+    dict = {'appname':appname,'acckey':acckey,'secretkey':secretkey}
+    return render(request,'users/uploaddatatocloud.html',dict)
